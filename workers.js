@@ -17,7 +17,6 @@ Użycie: ?url=https://example.com`,
         );
       }
 
-      // Zabezpieczenie przed pętlą proxy
       if (target.startsWith(url.origin)) {
         return new Response("Pętla proxy jest zablokowana.", {
           status: 400,
