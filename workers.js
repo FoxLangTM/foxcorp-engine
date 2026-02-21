@@ -4,19 +4,18 @@
 // compatibility_date = "2024-01-01"
 
 export default {
-  async fetch(request, env, ctx) 
-    try 
-      const url = new URL(request.url)
-      let target = url.searchParams.get("url")
+  async fetch(request, env, ctx) {
+    try {
+      const url = new URL(request.url);
+      const target = url.searchParams.get("url");
 
-      // Jeśli parametr jest pusty, spróbujmy odczytać go z całego query strin
-      if (!target && url.search.includes("url=")) 
-          target = decodeURIComponent(url.search.split("url=")[1])
-      
-
-      if (!target)
-        return new Response("FoxEngine Error: Missing target URL parameter.", { status: 400 })
-      };
+      if (!target) {
+        return new Response(
+          `Brak parametru ?url=... 
+Użycie: ?url=https://example.com`,
+          { status: 400, headers: { "content-type": "text/plain; charset=utf-8" } }
+        );
+      }
 
       // Zabezpieczenie przed pętlą proxy
       if (target.startsWith(url.origin)) {
