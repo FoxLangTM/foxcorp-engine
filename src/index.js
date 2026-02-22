@@ -95,6 +95,14 @@ function rewriteHtml(html, workerUrl, targetUrl) {
     } catch { return url; }
   };
 
+const cleanHeaders = new Headers(request.headers);
+cleanHeaders.set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
+cleanHeaders.set("Accept-Language", "pl-PL,pl;q=0.9,en-US;q=0.8,en;q=0.7");
+
+const response = await fetch(targetUrl, {
+    headers: cleanHeaders
+});
+
   // Dodajemy banner (skoro go używasz w kodzie poniżej)
   const banner = `<div style="display:none">FoxEngine Proxy Active</div>`;
 
