@@ -1,29 +1,33 @@
 export default {
   async fetch(request, env, ctx) {
-    if (request.method === "OPTIONS") {
-      return new Response(null, {
-        headers: {
-          "Access-Control-Allow-Origin": "*",
-          "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-          "Access-Control-Allow-Headers": "Content-Type, X-Requested-With, FoxEngine-Core",
-          "Access-Control-Max-Age": "86400",
-        },
-      });
-    }
-
     try {
       const url = new URL(request.url);
-      let target = url.searchParams.get("url");
+      const target = url.searchParams.get("url");
 
-      if (!target && url.search.includes("url=")) {
-        target = decodeURIComponent(url.search.split("url=")[1]);
+      // 1. POPRAWIONY I DOMKNIĘTY BLOK OPTIONS
+      if (request.method === "OPTIONS") {
+        return new Response(null, {
+          status: 204,
+          headers: {
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type, X-Requested-With, FoxEngine-Core",
+          },
+        });
       }
 
-      if (!target) return new Response("FoxEngine: No URL", { status: 400, headers: { "Access-Control-Allow-Origin": "*" } });
+      if (!target) {
+        return new Response(`Brak parametru ?url=...`, { 
+          status: 400, 
+          headers: { "content-type": "text/plain; charset=utf-8", "Access-Control-Allow-Origin": "*" } 
+        });
+      }
+
+      if (target.startsWith(url.origin)) {
+        return new Response("Pętla proxy zablokowana.", { status: 400 });
+      }
 
       const targetUrl = new URL(target);
-      
-      // Łączymy bezpieczeństwo z udawaniem przeglądarki
       const init = {
         method: request.method,
         headers: buildForwardHeaders(request.headers, targetUrl),
@@ -31,39 +35,43 @@ export default {
         redirect: "follow",
       };
 
-      const response = await fetch(targetUrl.toString(), init);
-      const newHeaders = new Headers(response.headers);
+      const upstreamResponse = await fetch(targetUrl.toString(), init);
+      const newHeaders = new Headers(upstreamResponse.headers);
 
       stripSecurityHeaders(newHeaders);
-      newHeaders.set("Access-Control-Allow-Origin", "*");
+      newHeaders.set("Access-Control-Allow-Origin", "*"); // Dodajemy CORS do odpowiedzi
 
       const contentType = newHeaders.get("content-type") || "";
 
-      // Jeśli to nie tekst, zwracamy bezpośrednio (naprawia ikony/obrazki)
+      // Obsługa binariów i CSS (CSS też chcemy przepisywać, by linki w nim działały)
       if (!contentType.includes("text/html") && !contentType.includes("text/css")) {
-        return new Response(response.body, { status: response.status, headers: newHeaders });
+        return new Response(upstreamResponse.body, {
+          status: upstreamResponse.status,
+          headers: newHeaders,
+        });
       }
 
-      let text = await response.text();
-      text = rewriteHtml(text, url, targetUrl);
+      const text = await upstreamResponse.text();
+      const rewritten = rewriteHtml(text, url, targetUrl);
 
-      return new Response(text, { status: response.status, headers: newHeaders });
+      return new Response(rewritten, {
+        status: upstreamResponse.status,
+        headers: newHeaders,
+      });
     } catch (e) {
-      return new Response("Err: " + e.message, { status: 500, headers: { "Access-Control-Allow-Origin": "*" } });
+      return new Response("Błąd workera: " + e.message, { status: 500 });
     }
   },
 };
 
 function buildForwardHeaders(incomingHeaders, targetUrl) {
   const headers = new Headers();
-  // Udajemy przeglądarkę, aby uniknąć 403 na DDG
   headers.set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
   headers.set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8");
   headers.set("Accept-Language", "pl-PL,pl;q=0.9,en-US;q=0.8,en;q=0.7");
   headers.set("Host", targetUrl.host);
   headers.set("Referer", targetUrl.origin + "/");
-  
-  // Zachowujemy kluczowy nagłówek dla Twojego JS
+
   if (incomingHeaders.get("X-Requested-With")) {
     headers.set("X-Requested-With", incomingHeaders.get("X-Requested-With"));
   }
@@ -78,6 +86,7 @@ function stripSecurityHeaders(headers) {
 
 function rewriteHtml(html, workerUrl, targetUrl) {
   const proxyBase = workerUrl.origin + workerUrl.pathname;
+  
   const proxify = (url) => {
     try {
       if (!url || url.startsWith("#") || url.startsWith("javascript:") || url.startsWith("data:")) return url;
@@ -85,6 +94,9 @@ function rewriteHtml(html, workerUrl, targetUrl) {
       return `${proxyBase}?url=${encodeURIComponent(u.toString())}`;
     } catch { return url; }
   };
+
+  // Dodajemy banner (skoro go używasz w kodzie poniżej)
+  const banner = `<div style="display:none">FoxEngine Proxy Active</div>`;
 
   return html
     .replace(/(href|src|action|data-src|srcset)\s*=\s*"(.*?)"/gi, (m, attr, val) => {
@@ -98,5 +110,6 @@ function rewriteHtml(html, workerUrl, targetUrl) {
       return `${attr}="${proxify(val)}"`;
     })
     .replace(/(href|src)\s*=\s*'(.*?)'/gi, (m, attr, val) => `${attr}='${proxify(val)}'`)
-    .replace(/url\((['"]?)(.*?)\1\)/gi, (m, quote, val) => `url(${quote}${proxify(val)}${quote})`);
+    .replace(/url\((['"]?)(.*?)\1\)/gi, (m, quote, val) => `url(${quote}${proxify(val)}${quote})`)
+    .replace("</body>", banner + "</body>");
 }
