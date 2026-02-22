@@ -95,13 +95,41 @@ function rewriteHtml(html, workerUrl, targetUrl) {
     } catch { return url; }
   };
 
-const cleanHeaders = new Headers(request.headers);
-cleanHeaders.set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
-cleanHeaders.set("Accept-Language", "pl-PL,pl;q=0.9,en-US;q=0.8,en;q=0.7");
 
-const response = await fetch(targetUrl, {
-    headers: cleanHeaders
-});
+async function handleRequest(request) {
+  const url = new URL(request.url);
+  let targetUrl = url.searchParams.get('url');
+
+  if (!targetUrl) return new Response("Missing URL", { status: 400 });
+
+  // KLUCZ: Tworzymy zupełnie nowe nagłówki, usuwając te od Cloudflare
+  const headers = new Headers();
+  headers.set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36");
+  headers.set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8");
+  headers.set("Accept-Language", "pl-PL,pl;q=0.9,en-US;q=0.8,en;q=0.7");
+  headers.set("Cache-Control", "no-cache");
+
+  try {
+    const response = await fetch(targetUrl, {
+      method: "GET",
+      headers: headers,
+      redirect: "follow"
+    });
+
+    // Klonujemy odpowiedź, aby dodać nagłówki CORS, by Twoja strona mogła ją odczytać
+    const newResp = new Response(response.body, response);
+    newResp.headers.set("Access-Control-Allow-Origin", "*");
+    newResp.headers.set("Access-Control-Allow-Methods", "GET, HEAD, POST, OPTIONS");
+    
+    // Usuwamy nagłówki bezpieczeństwa, które mogłyby blokować wyświetlanie w iframe
+    newResp.headers.delete("Content-Security-Policy");
+    newResp.headers.delete("X-Frame-Options");
+
+    return newResp;
+  } catch (e) {
+    return new Response("FoxEngine Error: " + e.message, { status: 500 });
+  }
+}
 
   // Dodajemy banner (skoro go używasz w kodzie poniżej)
   const banner = `<div style="display:none">FoxEngine Proxy Active</div>`;
