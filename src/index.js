@@ -1,5 +1,17 @@
 export default {
   async fetch(request, env, ctx) {
+    // 1. OBSŁUGA CORS (Niezbędne, aby Twoja strona mogła gadać z tym silnikiem)
+    if (request.method === "OPTIONS") {
+      return new Response(null, {
+        headers: {
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+          "Access-Control-Allow-Headers": "Content-Type, X-Requested-With, FoxEngine-Core",
+          "Access-Control-Max-Age": "86400",
+        },
+      });
+    }
+
     try {
       const url = new URL(request.url);
       let target = url.searchParams.get("url");
@@ -27,7 +39,7 @@ export default {
       const newHeaders = new Headers(upstreamResponse.headers);
 
       stripSecurityHeaders(newHeaders);
-      newHeaders.set("Access-Control-Allow-Origin", "*");
+      newHeaders.set("Access-Control-Allow-Origin", "*"); // To pozwala na wyświetlanie wyników
 
       const contentType = newHeaders.get("content-type") || "";
 
@@ -46,10 +58,15 @@ export default {
         headers: newHeaders,
       });
     } catch (e) {
-      return new Response("Err: " + e.message, { status: 500 });
+      return new Response("Err: " + e.message, { 
+        status: 500,
+        headers: { "Access-Control-Allow-Origin": "*" }
+      });
     }
   },
 };
+
+// --- FUNKCJE POMOCNICZE (Zostają bez zmian, bo są świetne) ---
 
 function buildForwardHeaders(incomingHeaders, targetUrl) {
   const headers = new Headers();
