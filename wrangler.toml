@@ -1,0 +1,6 @@
+name = "foxcorp-engine"
+main = "src/index.js"
+compatibility_date = "2026-02-09"
+
+[observability]
+enabled = true
