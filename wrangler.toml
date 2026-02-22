@@ -1,4 +1,4 @@
-name = "foxcorp-engine"
+name = "foxcorp-engines"
 main = "src/index.js"
 compatibility_date = "2024-01-01"
 account_id = "e597e0540aa0e5582bf19252749e57d5"
