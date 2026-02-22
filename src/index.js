@@ -68,20 +68,33 @@ export default {
 
 function buildForwardHeaders(incomingHeaders, targetUrl) {
   const headers = new Headers();
+  
+  const clientIP = incomingHeaders.get("cf-connecting-ip") || "";
+
   for (const [key, value] of incomingHeaders.entries()) {
     const lower = key.toLowerCase();
-    if (["host", "cf-connecting-ip", "cf-ipcountry", "cf-ray", "x-forwarded-for", "x-real-ip"].includes(lower)) continue;
     
+    if (["host", "cf-connecting-ip", "cf-ipcountry", "cf-ray", "x-forwarded-for", "x-real-ip"].includes(lower)) continue;
+
     if (lower === "origin" || lower === "referer") {
       headers.set(key, targetUrl.origin + "/");
       continue;
     }
     headers.set(key, value);
   }
+
   headers.set("host", targetUrl.host);
+  
+  if (clientIP) {
+    headers.set("X-Forwarded-For", clientIP);
+    headers.set("X-Real-IP", clientIP);
+  }
+
   headers.set("user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
+  
   return headers;
 }
+
 
 function stripSecurityHeaders(headers) {
   const toDelete = ["x-frame-options", "content-security-policy", "content-security-policy-report-only", "x-content-type-options", "x-xss-protection", "referrer-policy", "permissions-policy", "strict-transport-security"];
